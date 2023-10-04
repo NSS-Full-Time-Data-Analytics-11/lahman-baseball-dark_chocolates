@@ -67,29 +67,11 @@ FROM batting
 
 
 --7.From 1970 – 2016, what is the largest number of wins for a team that did not win the world 
---series? 
-select name , w , yearid
-from TEAMS
-WHERE (yearid BETWEEN 1970 AND 2016)
-	AND wswin = 'N'
-ORDER BY w DESC
-
---What is the smallest number of wins for a team that did win the world series? 
-select name , w , yearid
-from TEAMS
-WHERE (yearid BETWEEN 1970 AND 2016)
-	AND wswin = 'Y'
-ORDER BY w 
-
+--series? What is the smallest number of wins for a team that did win the world series? 
 --Doing this will probably result in an unusually small number of wins for a world series 
---champion – determine why this is the case. 
-I DO NOT UNDERSTAND THIS, EVERYTHING LOOKS PRETTY COMPRABLE...?
-SELECT * FROM teams WHERE yearid =1981
---Then redo your query, excluding the problem year. 
+--champion – determine why this is the case. Then redo your query, excluding the problem year. 
 --How often from 1970 – 2016 was it the case that a team with the most wins also won the world 
 --series? What percentage of the time?
-
-ONLY USING TEAMS TABLE
 
 --8. Using the attendance figures from the homegames table, find the teams and parks which had
 --the top 5 average attendance per game in 2016 (where average attendance is defined as total 
@@ -151,5 +133,9 @@ SELECT * FROM people
 --*-find 10 year players
 SELECT *
 FROM people
+
+
+
+
 
 
