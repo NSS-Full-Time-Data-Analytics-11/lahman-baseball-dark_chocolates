@@ -7,9 +7,9 @@ FROM teams;
 
 
 --     2. Find the name and height of the shortest player in the database. How many games did he play in? What is the name of the team for which he played?
--- Eddie Gaedel at 43 inches (3ft 7 in) played in 1 game for the St. Louis Browns.
+-- Eddie Gaedel at 43 inches (3ft 7 in) played in 1 game for the St. Louis Browns. (This franchise would later become the Baltimore Orioles)
 
-SELECT namefirst, namelast, height, G_all, name AS team_name, franchname
+SELECT namefirst, namelast, height, G_all, name AS team_name --, franchname
 FROM people LEFT JOIN (SELECT playerid, teamid, G_all FROM appearances) AS appearances USING (playerid)
 			LEFT JOIN teams USING (teamid)
 			LEFT JOIN teamsfranchises USING (franchid)
@@ -18,7 +18,10 @@ LIMIT 1;
 
 
 
---     3. Find all players in the database who played at Vanderbilt University. Create a list showing each player’s first and last names as well as the total salary they earned in the major leagues. Sort this list in descending order by the total salary earned. Which Vanderbilt player earned the most money in the majors?
+--     3. Find all players in the database who played at Vanderbilt University. Create a list showing each player’s first and last 
+--	   names as well as the total salary they earned in the major leagues. Sort this list in descending order by the total salary earned. 
+--	   Which Vanderbilt player earned the most money in the majors?
+-- David Price with $245,553,888,00
 
 SELECT namefirst || ' ' || namelast AS fullname, MIN(schoolname) AS schoolname, SUM(salary)::numeric::money AS tot_salary
 FROM people LEFT JOIN collegeplaying USING (playerid)
@@ -30,14 +33,16 @@ ORDER BY tot_salary DESC NULLS LAST;
 
 
 
---     4. Using the fielding table, group players into three groups based on their position: label players with position OF as "Outfield", those with position "SS", "1B", "2B", and "3B" as "Infield", and those with position "P" or "C" as "Battery". Determine the number of putouts made by each of these three groups in 2016.
+--     4. Using the fielding table, group players into three groups based on their position: label players with position OF as 
+--	   "Outfield", those with position "SS", "1B", "2B", and "3B" as "Infield", and those with position "P" or "C" as "Battery". 
+--	   Determine the number of putouts made by each of these three groups in 2016.
 -- Battery: 41424		Infield: 58934		Outfield: 29560
 
 SELECT CASE WHEN pos = 'OF' THEN 'Outfield'
 	   		WHEN pos IN ('SS', '1B', '2B', '3B') THEN 'Infield'
 			WHEN pos IN ('P', 'C') THEN 'Battery'
 			ELSE 'NA' END AS position,
-	   SUM(po) AS tot_putouts, MIN(yearid) AS year
+	   SUM(po) AS tot_putouts
 FROM fielding
 WHERE yearid = 2016
 GROUP BY position;
@@ -61,8 +66,10 @@ GROUP BY decade;
 
 
 
---     6. Find the player who had the most success stealing bases in 2016, where success is measured as the percentage of stolen base attempts which are successful. (A stolen base attempt results either in a stolen base or being caught stealing.) Consider only players who attempted at least 20 stolen bases.
--- Christopher Scoot was the most successful at 91% 
+--     6. Find the player who had the most success stealing bases in 2016, where success is measured as the percentage of stolen 
+--	   base attempts which are successful. (A stolen base attempt results either in a stolen base or being caught stealing.) 
+--	   Consider only players who attempted at least 20 stolen bases.
+-- Christopher Scott was the most successful at 91% 
 
 WITH steal_stats AS (
 SELECT playerid, namegiven, yearid, sb, cs, sb+cs AS steal_attempts
@@ -180,9 +187,9 @@ WHERE yearid = al_year OR yearid = nl_year;
 --	   number of home runs they hit in 2016.
 
 WITH hr_2016 AS (
-SELECT playerid, hr AS hr_2016, yearid AS year
-FROM batting
-WHERE yearid = 2016 AND hr > 0),
+	SELECT playerid, hr AS hr_2016
+	FROM batting
+	WHERE yearid = 2016 AND hr > 0),
 
 hr_stats AS (
 	SELECT playerid, hr, yearid, hr_2016,
@@ -200,15 +207,34 @@ hr_names AS (
 	FROM hr_max LEFT JOIN salaries USING (playerid)
 	WHERE yearid = 2006
 	ORDER BY playerid, yearid)
-
+-- This last CTE checks to see if there was a salary in 2006 (meaning they've been playing for at least 10 years)
 
 SELECT namefirst || ' ' || namelast AS fullname, hr_2016
-FROM hr_names LEFT JOIN people USING (playerid)
+FROM hr_names LEFT JOIN people USING (playerid);
+
 
 
 -- Open-ended questions
 
---     11. Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to look on a year-by-year basis.
+--     11. Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. 
+--	   As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to 
+--	   look on a year-by-year basis.
+-- My intution is saying no, there isn't a correlation.
+
+WITH sal_wins AS (
+	SELECT yearid, teamid, SUM(salary)::numeric::money AS team_salary, MAX(w) AS wins,
+		   AVG(SUM(salary) / MAX(w)) OVER (PARTITION BY yearid)::numeric::money AS yearly_dollars_per_win,
+		   AVG(SUM(salary) / MAX(w)) OVER (PARTITION BY teamid)::numeric::money AS team_dollars_per_win
+	FROM salaries INNER JOIN teams USING (yearid, teamid)
+	WHERE yearid >= 2000
+	GROUP BY yearid, teamid
+	ORDER BY teamid, yearid)
+
+SELECT yearid, MAX(yearly_dollars_per_win) AS yearly_dollars_per_win
+FROM sal_wins
+GROUP BY yearid
+ORDER BY yearid;
+
 
 --     12. In this question, you will explore the connection between number of wins and attendance.
 --         Does there appear to be any correlation between attendance at home games and number of wins?
