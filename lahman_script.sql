@@ -236,10 +236,43 @@ GROUP BY yearid
 ORDER BY yearid;
 
 
+
 --     12. In this question, you will explore the connection between number of wins and attendance.
 --         Does there appear to be any correlation between attendance at home games and number of wins?
+-- Teams with above average wins in a year only have above average attendance 30% of the time, so I wouldn't say there's a correlation
+-- between attendance and number of wins.
+
+WITH att AS (
+	SELECT year, teamid, g, ghome, 
+		   w, AVG(w) OVER (PARTITION BY year)::INT AS avg_year_wins,
+		   attendance, AVG(attendance) OVER (PARTITION BY year)::INT AS avg_year_att
+	FROM (SELECT teamid, g, ghome, w, l, yearid FROM teams) AS team_stats INNER JOIN homegames 
+		  ON team_stats.teamid = homegames.team AND team_stats.yearid = homegames.year
+	WHERE ghome IS NOT NULL
+	ORDER BY year, w DESC, attendance DESC),
+
+att_avg AS (
+	SELECT year, teamid, g, ghome, 
+		   w, avg_year_wins, CASE WHEN avg_year_wins < w THEN 'Y'
+								  ELSE 'N' END AS above_avg_wins,
+		   attendance, avg_year_att, CASE WHEN avg_year_att < attendance THEN 'Y'
+										  ELSE 'N' END AS above_avg_att
+	FROM att)
+
+
+SELECT COUNT(*), (SELECT COUNT(*) FROM att_avg) AS total, 
+	   ROUND((100*COUNT(*)::numeric / (SELECT COUNT(*) FROM att_avg)::numeric),2) AS percentage
+FROM att_avg
+WHERE above_avg_wins = 'Y' AND above_avg_att = 'Y'
+
 --         Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? 
 --		   Making the playoffs means either being a division winner or a wild card winner.
+
+
+
+
+
+
 
 --     13. It is thought that since left-handed pitchers are more rare, causing batters to face them less often, that they are 
 --	   more effective. Investigate this claim and present evidence to either support or dispute this claim. First, determine just 
