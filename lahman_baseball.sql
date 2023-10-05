@@ -96,7 +96,7 @@ with homeruns as (SELECT yearid, sum(hra) / sum(g) as hra_per_g
 	
 
  
---Add name
+--Add name chritopher 91%..ppl table
 SELECT playerid, round((sb::numeric/(sb+cs)::numeric)*100, 2) as sb_success_rate
 from batting
 WHERE sb > 20 and yearid = 2016
@@ -156,7 +156,7 @@ INNER join parks
 on parks.park = attendancedetails.park
 INNER join teams 
 on parks.park_name = teams.park
-WHERE g > 10
+WHERE g >= 10
 GROUP by 1,2,avg_attendance
 order by avg_attendance desc
 limit 5
@@ -175,21 +175,22 @@ full name and the teams that they were  managing when they won the award.*/
 
 SELECT *from awardsmanagers;
 SELECT *from teams;
-SELECT * from managers
+--SELECT * from managers
+SELECT * from people
+---SELECT * from ppl (davey Joshsson)
 
 
-
-with attendancedata as (SELECT teams.teamid, awardid,yearid 
+with attendancedata as (SELECT teams.teamid, awardid,yearid,playerid
 						from awardsmanagers
 						INNER join teams using(yearid)
 						WHERE awardid = 'TSN Manager of the Year' and awardsmanagers.lgid = 'AL'
 						intersect
-						SELECT teams.teamid,awardid, yearid from awardsmanagers
+						SELECT teams.teamid,awardid, yearid,playerid from awardsmanagers
 						INNER join teams using(yearid)
 						WHERE awardid = 'TSN Manager of the Year' and awardsmanagers.lgid = 'NL')
 						
-SELECT distinct(teamid), awardid from attendancedata
-INNER join managers using(teamid)
+SELECT distinct(teamid), awardid,playerid from attendancedata
+INNER join people using(playerid)
 
 
 
@@ -198,9 +199,11 @@ Find all players who hit their career highest number of home runs in 2016. Consi
 and who hit at least one home run in 2016. Report the players' first and last names and the number of home runs they hit in 2016.*/
 SELECT * from batting
 SELECT * from teams
+SELECT * from people
 
-SELECT batting.yearid, teamid, max(batting.hr) from teams
-INNER join batting using(teamid)
+SELECT batting.yearid,batting.teamid, people.namefirst as player_name, max(batting.hr) from teams
+INNER join batting using(yearid)
+INNER join people using(playerid)
 where batting.yearid = 2016
-GROUP by 1,2
-
+GROUP by 1,2,3
+order by max(batting.hr) desc
