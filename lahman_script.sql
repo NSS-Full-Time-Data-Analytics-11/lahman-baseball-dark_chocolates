@@ -72,9 +72,9 @@ GROUP BY decade;
 -- Christopher Scott was the most successful at 91% 
 
 WITH steal_stats AS (
-SELECT playerid, namegiven, yearid, sb, cs, sb+cs AS steal_attempts
-FROM batting INNER JOIN (SELECT playerid, namegiven FROM people) AS names USING (playerid)
-WHERE yearid = 2016 AND sb + cs >= 20)
+	SELECT playerid, namegiven, yearid, sb, cs, sb+cs AS steal_attempts
+	FROM batting INNER JOIN (SELECT playerid, namegiven FROM people) AS names USING (playerid)
+	WHERE yearid = 2016 AND sb + cs >= 20)
 
 SELECT namegiven, sb, cs, ROUND(100*sb/steal_attempts,2) AS steal_percent
 FROM steal_stats
@@ -159,18 +159,18 @@ LIMIT 5;
 -- Davey Johnson (with the Orioles and Nationals) and Jim Leyland (with the Pirates and Tigers)
 
 WITH tsn_al AS (
-SELECT playerid, yearid AS al_year, lgid, awardid
-FROM awardsmanagers
-WHERE awardid = 'TSN Manager of the Year' AND lgid = 'AL'),
+	SELECT playerid, yearid AS al_year, lgid, awardid
+	FROM awardsmanagers
+	WHERE awardid = 'TSN Manager of the Year' AND lgid = 'AL'),
 
 tsn_nl AS (
-SELECT playerid, yearid AS nl_year, lgid, awardid
-FROM awardsmanagers
-WHERE awardid = 'TSN Manager of the Year' AND lgid = 'NL'),
+	SELECT playerid, yearid AS nl_year, lgid, awardid
+	FROM awardsmanagers
+	WHERE awardid = 'TSN Manager of the Year' AND lgid = 'NL'),
 
 tsn_both AS (
-SELECT DISTINCT playerid, al_year, nl_year
-FROM tsn_al INNER JOIN tsn_nl USING(playerid, awardid))
+	SELECT DISTINCT playerid, al_year, nl_year
+	FROM tsn_al INNER JOIN tsn_nl USING(playerid, awardid))
 
 
 SELECT DISTINCT namefirst || ' ' || namelast AS fullname, 
@@ -211,6 +211,22 @@ hr_names AS (
 
 SELECT namefirst || ' ' || namelast AS fullname, hr_2016
 FROM hr_names LEFT JOIN people USING (playerid);
+
+
+-- Or, more succinctly: 
+
+
+WITH hr_stats AS (
+	SELECT playerid, namefirst || ' ' || namelast AS fullname, debut, hr, yearid,
+		   MAX(hr) OVER (PARTITION BY playerid) AS max_hr
+	FROM batting INNER JOIN people USING (playerid))
+
+SELECT fullname, hr
+FROM hr_stats
+WHERE yearid = 2016 AND hr > 0 AND hr = max_hr AND debut::DATE < '2007-01-01'
+ORDER BY playerid, yearid
+
+
 
 
 
@@ -268,9 +284,20 @@ WHERE above_avg_wins = 'Y' AND above_avg_att = 'Y'
 --         Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? 
 --		   Making the playoffs means either being a division winner or a wild card winner.
 
+WITH team_att AS (
+	SELECT name, year, divwin,  wcwin, wswin, AVG(attendance)::INT AS avg_attendance,
+		   AVG(attendance)::INT - LAG(AVG(attendance)::INT) OVER (PARTITION BY name) AS att_diff,
+		   LAG(wswin) OVER (PARTITION BY name) AS year_after_wswin
+	FROM (SELECT teamid, name, yearid, divwin, wcwin, wswin FROM teams) AS teams 
+		 INNER JOIN 
+		 (SELECT team, year, attendance FROM homegames) AS homegames ON teamid = team AND yearid = year
+	WHERE wswin IS NOT NULL
+	GROUP BY name, year, divwin, wcwin, wswin
+	ORDER BY name, year)
 
-
-
+SELECT *
+FROM team_att
+WHERE wswin = 'Y' OR year_after_wswin = 'Y'
 
 
 
