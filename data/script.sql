@@ -1,7 +1,7 @@
---What range of years for baseball games played does the provided database cover?
+--1. What range of years for baseball games played does the provided database cover?
   --from data dict: 1871 through 2016
   
---Find the name and height of the shortest player in the database. How many games did he play in? 
+--2. Find the name and height of the shortest player in the database. How many games did he play in? 
 SELECT playerid, CONCAT (namefirst,' ', namelast), height, g_all AS games_played
 FROM people JOIN appearances USING(playerid)
 ORDER BY height
@@ -17,7 +17,8 @@ FROM people JOIN appearances USING(playerid)
 ORDER BY height
 LIMIT 1;
 
---Find all players in the database who played at Vanderbilt University. 
+
+--3. Find all players in the database who played at Vanderbilt University. 
 SELECT * FROM schools WHERE schoolname = 'Vanderbilt University'
 SELECT *
 FROM collegeplaying 
@@ -37,7 +38,7 @@ ORDER BY total_salary DESC
 --Which Vanderbilt player earned the most money in the majors?
   --add a limit 1 to above & get David Price only
   
---Using the fielding table, group players into three groups based on their position: label players 
+--4. Using the fielding table, group players into three groups based on their position: label players 
 --with position OF as "Outfield", those with position "SS", "1B", "2B", and "3B" as "Infield", and those 
 --with position "P" or "C" as "Battery". Determine the number of putouts made by each of these three groups 
 --in 2016.
@@ -63,8 +64,24 @@ FROM batting
 --as the percentage of stolen base attempts which are successful. (A stolen base attempt 
 --results either in a stolen base or being caught stealing.) Consider only players who attempted
 --at least 20 stolen bases.
+SELECT SUM(sb + cs) AS attempts, CONCAT(people.namefirst, ' ', people.namelast) AS playername
+FROM batting INNER JOIN people USING(playerid)
+WHERE yearid = 2016 
+GROUP BY playername
+ORDER BY attempts DESC
 
+WITH attempt AS (SELECT playerid, SUM(sb + cs) AS attempts, CONCAT(people.namefirst, ' ', people.namelast) AS playername
+				FROM batting INNER JOIN people USING(playerid)
+				WHERE yearid = 2016 
+				GROUP BY playername
+				ORDER BY attempts DESC)
+SELECT attempt.playername, sb/attempt.attempts
+FROM batting INNER JOIN attempt USING(playerid)
+GROUP BY playerid
 
+SELECT * FROM batting
+
+--number of steals/attempts = %
 
 --7.From 1970 – 2016, what is the largest number of wins for a team that did not win the world 
 --series? 
@@ -88,8 +105,8 @@ SELECT * FROM teams WHERE yearid =1981
 --Then redo your query, excluding the problem year. 
 --How often from 1970 – 2016 was it the case that a team with the most wins also won the world 
 --series? What percentage of the time?
+ CTE w/ window function column with most wins, compare to that
 
-ONLY USING TEAMS TABLE
 
 --8. Using the attendance figures from the homegames table, find the teams and parks which had
 --the top 5 average attendance per game in 2016 (where average attendance is defined as total 
@@ -102,23 +119,14 @@ WITH big_games AS (SELECT team, park, (attendance/games) AS avg_attendance
 					WHERE year = 2016 AND games >10
 					ORDER BY avg_attendance DESC
 					LIMIT 5)
-SELECT team name , park_name, big_games.avg_attendance
+SELECT name, park_name, big_games.avg_attendance
 FROM big_games INNER JOIN parks USING (park)
-			
-ORDER BY avg_attendance DESC
+			   FULL JOIN teams ON 'year' = 'yearid' AND 'team' = 'teamid'
+ORDER BY avg_attendance 
+LIMIT 5
 
 SELECT * FROM teams
-SELECT * FROM parks
-
-WITH big_games AS (SELECT team, park, (attendance/games) AS avg_attendance
-					FROM homegames
-					WHERE year = 2016 AND games >10
-					ORDER BY avg_attendance DESC
-					LIMIT 5)
-SELECT name , park_name, big_games.avg_attendance
-FROM teams INNER JOIN parks ON 'park' = 'park_name'
-			INNER JOIN big_games USING(park)
-ORDER BY avg_attendance DESC
+SELECT * FROM homegames
 
 
 
@@ -126,30 +134,40 @@ ORDER BY avg_attendance DESC
 --and the American League (AL)? Give their full name and the teams that they were managing 
 --when they won the award.
 
----failed INTERSECT
-SELECT playerid, yearid , lgid
-FROM awardsmanagers
-WHERE awardid = 'TSN Manager of the Year'
-AND lgid = 'NL' 
-INTERSECT
-SELECT playerid, yearid , lgid
-FROM awardsmanagers
-WHERE awardid = 'TSN Manager of the Year'
-AND lgid = 'AL'
---why wont it pull johnsda02?
 
-SELECT CONCAT(namefirst, ' ', namelast), awards.playerid, awards.yearid, teams.name
-FROM people INNER JOIN teams USING(yearid)
+WITH winners AS ((SELECT playerid
+				FROM awardsmanagers
+				WHERE awardid = 'TSN Manager of the Year'
+				AND lgid = 'NL' 
+				ORDER BY playerid)
+			INTERSECT
+				(SELECT playerid
+				FROM awardsmanagers
+				WHERE awardid = 'TSN Manager of the Year'
+				AND lgid = 'AL'
+				ORDER BY playerid))
+SELECT playerid, yearid
+FROM awardsmanagers INNER JOIN winners USING(playerid)
 
-SELECT * FROM people
+
+
+
+SELECT * FROM managers
 
 --10. Find all players who hit their career highest number of home runs in 2016. Consider 
 --only players who have played in the league for at least 10 years, and who hit at least 
 --one home run in 2016. Report the players' first and last names and the number of home 
 --runs they hit in 2016.
 
---*-find 10 year players
-SELECT *
-FROM people
+--*-find 10 year players first
+WITH decade_players AS (SELECT playerid, CONCAT(namefirst, ' ', namelast) AS name
+						FROM people
+						WHERE (finalgame::date - debut::date)/365 >10
+						GROUP BY playerid)
+SELECT playerid, hr, decade_players.name
+FROM batting INNER JOIN decade_players USING(playerid)
+WHERE yearid = 2016
+ORDER BY hr DESC
 
-
+ 
+SELECT * FROM batting
