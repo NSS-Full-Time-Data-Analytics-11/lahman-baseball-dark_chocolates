@@ -131,34 +131,24 @@ ORDER BY percent_success_steals DESC;
 SELECT name, w, wswin, yearid
 FROM teams
 WHERE wswin = 'N'AND yearid BETWEEN 1970 AND 2016
-ORDER BY w DESC;
+ORDER BY w DESC
+LIMIT 1;
 
 SELECT name, w, wswin, yearid
 FROM teams
 WHERE wswin = 'Y' AND yearid BETWEEN 1970 AND 2016 AND yearid <>1981
 GROUP BY yearid, w, wswin, name
-ORDER BY w;
+ORDER BY w
+LIMIT 1;
 
-
-
-
-WITH wins_table AS(SELECT name, w, yearid, wswin,
-			SUM(CASE WHEN wswin = 'Y' THEN 1 END)AS sum_ws_wins
-			
-		FROM teams
-		WHERE wswin = 'Y' AND yearid BETWEEN 1970 AND 2016
-		GROUP BY name, w, yearid, wswin
-		UNION ALL
-		SELECT name, w, yearid, wswin,
-			SUM(CASE WHEN wswin = 'N' THEN 1 END)AS sum_ws_no
-		FROM teams
-		WHERE yearid BETWEEN 1970 AND 2016 AND w>= (SELECT MAX(w) AS max_wins
-											FROM teams)
-		GROUP BY name, w, yearid, wswin
-		ORDER BY yearid)
-SELECT name, w, yearid, wswin, ROUND((1.00/47.00)::decimal*100.00) AS percentage
+WITH wins_table AS(SELECT name, w,l, yearid, wswin,
+			MAX(w)OVER(PARTITION BY yearid)AS most_wins
+			FROM teams
+		    WHERE yearid BETWEEN 1970 AND 2016)
+SELECT COUNT(DISTINCT name), ROUND((COUNT(DISTINCT name)/46.00)*100.00, 2) AS percent
 FROM wins_table
-GROUP BY yearid, w, name, wswin;
+WHERE w = most_wins AND wswin = 'Y';
+		
 
 --8. Using the attendance figures from the homegames table, find the teams and parks which had the top 5 average attendance per game in 2016 (where average attendance is defined as total attendance divided by number of games). Only consider parks where there were at least 10 games played. Report the park name, team name, and average attendance. Repeat for the lowest 5 average attendance.
 
@@ -204,11 +194,12 @@ GROUP BY full_name, awardsmanagers.yearid, awardsmanagers.lgid, teamid;
 WITH hr_2016 AS (SELECT playerid, hr, yearid
 				 FROM batting
 				 WHERE hr >0 AND yearid = 2016)
-SELECT playerid, batting.yearid, debut::date, MAX(batting.hr)
+SELECT DISTINCT CONCAT(namefirst, ' ',namelast)AS full_name, MAX(batting.hr)AS homeruns
 FROM hr_2016 LEFT JOIN batting USING (playerid)
 			 LEFT JOIN people USING (playerid)
-WHERE debut::date < '2006-01-01'
-GROUP BY playerid, batting.yearid, debut::date
+WHERE debut::date < '2006-01-01' AND batting.yearid = 2016
+GROUP BY CONCAT(namefirst, ' ',namelast), batting.yearid, debut::date
+ORDER BY homeruns DESC;
 
 
 
