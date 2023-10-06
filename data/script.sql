@@ -54,37 +54,47 @@ SELECT *
 FROM FIELDING
  
  
---5.)Find the average number of strikeouts per game by decade since 1920. Round the numbers 
+--****5.)Find the average number of strikeouts per game by decade since 1920. Round the numbers 
 --you report to 2 decimal places. Do the same for home runs per game. Do you see any trends?
 
---Joshua's way--
+--Joshua's way-----this part is weird in my brain...it logics but only bc he explained it...
+--i don't think i wouldn't have gotten here...
 WITH statsavg AS (SELECT yearid, MIN(FLOOR(yearid/10)*10) AS decade, ROUND(AVG(g),2) AS avg_games, 
 		ROUND(AVG(so),2) AS avg_so, ROUND(AVG(hr),2) AS avg_hr
 	FROM pitching
 	WHERE yearid >= 1920
 	GROUP BY yearid
 	ORDER BY yearid)
+--especially here
 SELECT decade, ROUND(AVG(avg_so/avg_games),2) AS so_gameavg, ROUND(AVG(avg_hr/avg_games),2) AS hr_gameavg
 FROM statsavg
 GROUP BY decade
 
---6. Find the player who had the most success stealing bases in 2016, where success is measured
+--***6. Find the player who had the most success stealing bases in 2016, where success is measured
 --as the percentage of stolen base attempts which are successful. (A stolen base attempt 
 --results either in a stolen base or being caught stealing.) Consider only players who attempted
 --at least 20 stolen bases.
+
+--formula for attempt total & name
+SELECT playerid, SUM(sb + cs) AS attempts, people.namefirst || ' '|| people.namelast AS playername
+		FROM batting INNER JOIN people USING(playerid)
+		WHERE yearid = 2016 
+		GROUP BY playername, playerid
+		ORDER BY attempts DESC
+
+
 WITH steal_attempts AS (SELECT playerid, SUM(sb + cs) AS attempts, CONCAT(people.namefirst, ' ', people.namelast) AS playername
 		FROM batting INNER JOIN people USING(playerid)
 		WHERE yearid = 2016 
 		GROUP BY playername, playerid
 		ORDER BY attempts DESC)
-SELECT playername, sb, cs, ROUND(sb/attempts, 2)AS steal_perc
-FROM batting INNER JOIN steal_attempts USING(playerid)
-WHERE attempts >20
-GROUP BY steal_attempts
+SELECT  
+FROM 
+WHERE 
+GROUP BY 
 
 SELECT * FROM batting
-round((sb::numeric/(sb+cs)::numeric)*100, 2)
---number of steals/attempts = %
+--aditi note?--round((sb::numeric/(sb+cs)::numeric)*100, 2)
 
 --7.From 1970 – 2016, what is the largest number of wins for a team that did not win the world 
 --series? 
@@ -138,6 +148,7 @@ ORDER BY avg_attendance
 LIMIT 5
 
 --Repeat for the lowest 5 average attendance
+--change order 
 
 --9. Which managers have won the TSN Manager of the Year award in both the National League(NL)
 --and the American League (AL)? Give their full name and the teams that they were managing 
@@ -157,13 +168,14 @@ SELECT DISTINCT playerid, yearid, teamid, CONCAT(namefirst, ' ', namelast)
 FROM awardsmanagers INNER JOIN winners USING(playerid)
 					INNER JOIN managers USING(playerid, yearid)
 					INNER JOIN people USING(playerid)
-	
+--to remove dupes, had to add distinct to the main query, thank you jennifer--
+
 --10. Find all players who hit their career highest number of home runs in 2016. Consider 
 --only players who have played in the league for at least 10 years, and who hit at least 
 --one home run in 2016. Report the players' first and last names and the number of home 
 --runs they hit in 2016.
 
---*-find 10 year players first
+---find 10 year players first
 WITH decade_players AS (SELECT playerid, CONCAT(namefirst, ' ', namelast) AS name
 						FROM people
 						WHERE (finalgame::date - debut::date)/365 >10
@@ -173,4 +185,4 @@ FROM batting INNER JOIN decade_players USING(playerid)
 WHERE yearid = 2016
 ORDER BY hr DESC
 
- 
+ --****need to sort the comapison to max
