@@ -50,7 +50,10 @@ GROUP BY position;
 
 
 --     5. Find the average number of strikeouts per game by decade since 1920. Round the numbers you report to 2 decimal places. Do the same for home runs per game. Do you see any trends?
--- Both Strikeouts and Homeruns had a peak in the 50's and 60's and have generally trended downward since (although strikeouts rose a bit in the 2010's)
+-- According to the first query, both Strikeouts and Homeruns had a peak in the 50's and 60's and have generally trended downward since
+-- 		(although strikeouts rose a bit in the 2010's). This query is a little strange because of how it takes averages of averages.
+-- The second query (which I believe gives more accurate info) has a trend of strikeouts generally increasing over the decades and homeruns having a 
+-- 		small peak in the 50's before having a large peak in the 2000's.
 
 WITH year_stats AS (
 	SELECT yearid, MIN(FLOOR(yearid/10)*10) AS decade, 
@@ -61,6 +64,20 @@ WITH year_stats AS (
 	ORDER BY yearid)
 
 SELECT decade, ROUND(AVG(avg_so/avg_games),2) AS so_per_game, ROUND(AVG(avg_hr/avg_games),2) AS hr_per_game
+FROM year_stats
+GROUP BY decade;
+
+-- Or alternatively:
+
+WITH year_stats AS (
+	SELECT yearid, MIN(FLOOR(yearid/10)*10) AS decade,
+		   SUM(g)::decimal AS tot_games, SUM(so)::decimal AS tot_so, SUM(hr)::decimal AS tot_hr
+	FROM batting
+	WHERE yearid >= 1920
+	GROUP BY yearid
+	ORDER BY yearid)
+
+SELECT decade, ROUND(10*AVG(tot_so/tot_games),2) AS so_per_game, ROUND(100*AVG(tot_hr/tot_games),2) AS hr_per_game
 FROM year_stats
 GROUP BY decade;
 
@@ -186,6 +203,7 @@ WHERE yearid = al_year OR yearid = nl_year;
 --	   league for at least 10 years, and who hit at least one home run in 2016. Report the players' first and last names and the 
 --	   number of home runs they hit in 2016.
 
+/*
 WITH hr_2016 AS (
 	SELECT playerid, hr AS hr_2016
 	FROM batting
@@ -211,9 +229,9 @@ hr_names AS (
 
 SELECT namefirst || ' ' || namelast AS fullname, hr_2016
 FROM hr_names LEFT JOIN people USING (playerid);
+*/
 
-
--- Or, more succinctly: 
+-- Or, more succinctly (and with more people): 
 
 
 WITH hr_stats AS (
@@ -235,7 +253,8 @@ ORDER BY playerid, yearid
 --     11. Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. 
 --	   As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to 
 --	   look on a year-by-year basis.
--- My intution is saying no, there isn't a correlation.
+-- My intution is saying no, there isn't a correlation. Trying to find "dollars per win" may not be the best approach, but nothing
+-- stands out in a way that makes me think that winning more is correlated with an increased salary.
 
 WITH sal_wins AS (
 	SELECT yearid, teamid, SUM(salary)::numeric::money AS team_salary, MAX(w) AS wins,
@@ -260,32 +279,37 @@ ORDER BY yearid;
 
 WITH att AS (
 	SELECT year, teamid, g, ghome, 
-		   w, AVG(w) OVER (PARTITION BY year)::INT AS avg_year_wins,
+		   w AS wins,  AVG(w) 		   OVER (PARTITION BY year)::INT AS avg_year_wins,
 		   attendance, AVG(attendance) OVER (PARTITION BY year)::INT AS avg_year_att
+	
 	FROM (SELECT teamid, g, ghome, w, l, yearid FROM teams) AS team_stats INNER JOIN homegames 
 		  ON team_stats.teamid = homegames.team AND team_stats.yearid = homegames.year
+	
 	WHERE ghome IS NOT NULL
 	ORDER BY year, w DESC, attendance DESC),
 
 att_avg AS (
 	SELECT year, teamid, g, ghome, 
-		   w, avg_year_wins, CASE WHEN avg_year_wins < w THEN 'Y'
-								  ELSE 'N' END AS above_avg_wins,
+		   wins,   avg_year_wins, 	 CASE WHEN  avg_year_wins  <  wins   THEN 'Y'
+								  		  ELSE 'N' END AS above_avg_wins,
 		   attendance, avg_year_att, CASE WHEN avg_year_att < attendance THEN 'Y'
 										  ELSE 'N' END AS above_avg_att
 	FROM att)
 
 
-SELECT COUNT(*), (SELECT COUNT(*) FROM att_avg) AS total, 
+SELECT COUNT(*) AS abv_avg_w_att, (SELECT COUNT(*) FROM att_avg) AS tot_w_att, 
 	   ROUND((100*COUNT(*)::numeric / (SELECT COUNT(*) FROM att_avg)::numeric),2) AS percentage
 FROM att_avg
 WHERE above_avg_wins = 'Y' AND above_avg_att = 'Y'
 
---         Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? 
---		   Making the playoffs means either being a division winner or a wild card winner.
+--         Do teams that win the world series see a boost in attendance the following year? 
+-- In general, no they do not. After labeling which years were years after a World Series win, I then took the difference in attendance
+-- for the home field of each team. Out of the 116 times that the world series was followed by another season, 60 time the attendance
+-- deccreased (or stayed at 0 for a few cases)! That means that 51% of the time, attendance will decrease after a World Series Win. 
+-- Essentially, it's a 50-50 chance that attendance will increase after a team wins the World Series.
 
 WITH team_att AS (
-	SELECT name, year, divwin,  wcwin, wswin, AVG(attendance)::INT AS avg_attendance,
+	SELECT name, year, wswin, AVG(attendance)::INT AS avg_attendance,
 		   AVG(attendance)::INT - LAG(AVG(attendance)::INT) OVER (PARTITION BY name) AS att_diff,
 		   LAG(wswin) OVER (PARTITION BY name) AS year_after_wswin
 	FROM (SELECT teamid, name, yearid, divwin, wcwin, wswin FROM teams) AS teams 
@@ -293,15 +317,119 @@ WITH team_att AS (
 		 (SELECT team, year, attendance FROM homegames) AS homegames ON teamid = team AND yearid = year
 	WHERE wswin IS NOT NULL
 	GROUP BY name, year, divwin, wcwin, wswin
-	ORDER BY name, year)
-
-SELECT *
+	ORDER BY name, year),
+	
+decrease AS (
+	SELECT COUNT(*) AS year_after_win_decrease
+	FROM team_att 
+	WHERE year_after_wswin = 'Y' AND att_diff <= 0)
+	
+	
+SELECT (SELECT year_after_win_decrease FROM decrease),
+	   COUNT(*) AS year_after_win_total,
+	   ROUND(100*(SELECT year_after_win_decrease FROM decrease)::decimal / COUNT(*)::decimal,2) AS percent_decrease
 FROM team_att
-WHERE wswin = 'Y' OR year_after_wswin = 'Y'
+WHERE year_after_wswin = 'Y'
+
+--		   What about teams that made the playoffs? Making the playoffs means either being a division winner or a wild card winner.
+-- Unlike after winning a World Series, a team making the playoffs only has decreased attendance the next year 40.5% of the time.
+-- So, it is more likely that attendance will increase after a team makes the playoffs than if they won the World Series (although, you
+-- need to make the playoffs to win the World Series, but this query involves every single team that made playoffs).
+
+WITH team_att AS (
+	SELECT name, year, divwin, wcwin, 
+		   CASE WHEN divwin = 'Y' OR wcwin = 'Y' THEN 'Y'
+				ELSE 'N' END AS playoff,
+		   AVG(attendance)::INT AS avg_attendance,
+		   AVG(attendance)::INT - LAG(AVG(attendance)::INT) OVER (PARTITION BY name) AS att_diff,
+		   LAG(divwin) OVER (PARTITION BY name) AS year_after_divwin,
+		   LAG(wcwin)  OVER (PARTITION BY name) AS year_after_wcwin
+	FROM (SELECT teamid, name, yearid, divwin, wcwin, wswin FROM teams) AS teams 
+		 INNER JOIN 
+		 (SELECT team, year, attendance FROM homegames) AS homegames ON teamid = team AND yearid = year
+	WHERE wswin IS NOT NULL
+	GROUP BY name, year, divwin, wcwin, wswin
+	ORDER BY name, year),
+	
+playoff AS (
+	SELECT name, year, playoff, att_diff,
+		   CASE WHEN year_after_divwin = 'Y' OR year_after_wcwin = 'Y' THEN 'Y'
+				ELSE 'N' END AS year_after_playoff
+	FROM team_att
+	WHERE playoff = 'Y' OR year_after_divwin = 'Y' OR year_after_wcwin = 'Y')
+
+SELECT (SELECT COUNT(*) FROM playoff WHERE year_after_playoff = 'Y') AS year_after_playoff_total,
+	   COUNT(*) AS year_after_playoff_decrease,
+	   ROUND(100*COUNT(*)::decimal / (SELECT COUNT(*) FROM playoff WHERE year_after_playoff = 'Y')::decimal,2) AS percent_decrease
+FROM playoff
+WHERE year_after_playoff = 'Y' AND att_diff <= 0;
 
 
 
 --     13. It is thought that since left-handed pitchers are more rare, causing batters to face them less often, that they are 
 --	   more effective. Investigate this claim and present evidence to either support or dispute this claim. First, determine just 
---	   how rare left-handed pitchers are compared with right-handed pitchers. Are left-handed pitchers more likely to win the 
---	   Cy Young Award? Are they more likely to make it into the hall of fame?
+--	   how rare left-handed pitchers are compared with right-handed pitchers. 
+-- Only 26.63% of pitchers are left handed, so they are more rare.
+
+WITH left_pitchers AS (
+	SELECT DISTINCT *
+	FROM (SELECT playerid, namefirst || ' ' || namelast AS fullname, throws FROM people) AS hand 
+		 RIGHT JOIN 
+		 (SELECT playerid FROM pitching) AS pitch USING (playerid)
+	WHERE throws = 'L'),
+
+all_pitchers AS (
+	SELECT DISTINCT playerid, namefirst || ' ' || namelast AS fullname, throws
+	FROM people INNER JOIN pitching USING (playerid))
+
+SELECT ROUND(100*(SELECT COUNT(*) FROM left_pitchers)::decimal / (SELECT COUNT(*) FROM all_pitchers)::decimal,2) AS left_percent
+
+--		Are left-handed pitchers more likely to win the Cy Young Award? Are they more likely to make it into the hall of fame?
+-- 53 right handed pitchers received the Cy Young Award when only 24 left handed pitchers did the same.
+-- 347 right handed pitchers got into the Hall of Fame while only 141 left handed pitchers got in.
+-- Overall, right handed pitchers get more awards likely because there are more of them to receive awards. As such, there may not be 
+-- a distinct advantage of using left handed pitchers as a strategic move.
+
+WITH left_pitchers AS (
+	SELECT DISTINCT *
+	FROM (SELECT playerid, namefirst || ' ' || namelast AS fullname, throws FROM people) AS hand 
+		 RIGHT JOIN 
+		 (SELECT playerid FROM pitching) AS pitch USING (playerid)
+	WHERE throws = 'L'),
+
+right_pitchers AS (
+	SELECT DISTINCT *
+	FROM (SELECT playerid, namefirst || ' ' || namelast AS fullname, throws FROM people) AS hand 
+		 RIGHT JOIN 
+		 (SELECT playerid FROM pitching) AS pitch USING (playerid)
+	WHERE throws = 'R'),
+
+left_cy AS (
+	SELECT DISTINCT playerid, fullname, throws
+	FROM left_pitchers INNER JOIN awardsplayers USING (playerid)
+	WHERE awardid = 'Cy Young Award'),
+
+right_cy AS (
+	SELECT DISTINCT playerid, fullname, throws
+	FROM right_pitchers INNER JOIN awardsplayers USING (playerid)
+	WHERE awardid = 'Cy Young Award'),
+	
+left_fame AS (
+	SELECT DISTINCT playerid, fullname, throws
+	FROM left_pitchers INNER JOIN halloffame USING (playerid)),
+
+right_fame AS (
+	SELECT DISTINCT playerid, fullname, throws
+	FROM right_pitchers INNER JOIN halloffame USING (playerid))
+
+SELECT (SELECT COUNT(*) FROM left_cy)  AS  left_cy_count, 
+	   (SELECT COUNT(*) FROM right_cy) AS right_cy_count,
+	   (SELECT COUNT(*) FROM left_fame)  AS  left_fame_count,
+	   (SELECT COUNT(*) FROM right_fame) AS right_fame_count;
+
+
+
+
+
+
+
