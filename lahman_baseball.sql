@@ -97,10 +97,11 @@ with homeruns as (SELECT yearid, sum(hra) / sum(g) as hra_per_g
 
  
 --Add name chritopher 91%..ppl table
-SELECT playerid, round((sb::numeric/(sb+cs)::numeric)*100, 2) as sb_success_rate
+SELECT playerid, namegiven, round((sb::numeric/(sb+cs)::numeric)*100, 2) as sb_success_rate
 from batting
+INNER join people USING(playerid)
 WHERE sb > 20 and yearid = 2016
-order by 2 desc
+order by 3 desc
 limit 1
 
 
@@ -142,68 +143,81 @@ ORDER by wins desc
 
 
 /*
+Step# 1
 Using the attendance figures from the homegames table, find the teams and parks which had the top 5 average attendance per
-game in 2016 (where average attendance is defined as total attendance divided by number of games). Only consider parks where there were at least 10 games played. 
-Report the park name, team name, and average attendance.  Repeat for the lowest 5 average attendance. */
+game in 2016 (where average attendance is defined as total attendance divided by number of games). 
+Step# 2
+Only consider parks where there were at least 10 games played. 
+Report the park name, team name, and average attendance.  
+*/
+WITH attendancedetails AS (SELECT team, park, avg(attendance/games) ::integer AS avg_attendance
+							FROM homegames
+							WHERE year = 2016 --AND GAMES >= 10
+							GROUP BY 1, 2
+						  	ORDER BY 3 DESC LIMIT 5)
 
-with attendancedetails as (SELECT team,park,avg(attendance/games) ::integer as avg_attendance
-						from homegames
-						WHERE year = 2016
-						GROUP BY 1,2)
-
-SELECT attendancedetails.team,attendancedetails.park,sum(g) as games from attendancedetails 
-INNER join parks 
-on parks.park = attendancedetails.park
-INNER join teams 
-on parks.park_name = teams.park
-WHERE g >= 10
-GROUP by 1,2,avg_attendance
-order by avg_attendance desc
-limit 5
-
-
-SELECT *from homegames
-SELECT *from parks
-
-SELECT *from teams
-
-
+SELECT DISTINCT teams.name, parks.park_name, avg_attendance from attendancedetails 
+INNER join parks ON attendancedetails.park = parks.park
+INNER join teams ON attendancedetails.team = teams.teamid --and teams.park = parks.park_name 
+and yearid = 2016
+ORDER BY 3 DESC
 
 /*
-Which managers have won the TSN Manager of the Year award in both the National League (NL) and the American League (AL)? Give their 
+Step# 3
+Repeat for the lowest 5 average attendance.
+*/
+WITH attendancedetails AS (SELECT team, park, avg(attendance/games) ::integer as avg_attendance
+							FROM homegames
+							WHERE year = 2016 --AND GAMES >= 10
+							GROUP BY 1, 2
+						  	ORDER BY 3 LIMIT 5)
+
+SELECT DISTINCT teams.name, parks.park_name, avg_attendance from attendancedetails 
+INNER join parks ON attendancedetails.park = parks.park
+INNER join teams ON attendancedetails.team = teams.teamid --and teams.park = parks.park_name 
+and yearid = 2016
+ORDER BY 3 
+
+/*
+Which managers have won the TSN Manager of the Year award in both the National League (NL) and the American League (AL)? 
+
+Give their 
 full name and the teams that they were  managing when they won the award.*/
 
-SELECT *from awardsmanagers;
-SELECT *from teams;
---SELECT * from managers
-SELECT * from people
 ---SELECT * from ppl (davey Joshsson)
+SELECT playerid, yearid, lgid FROM awardsmanagers WHERE awardid = 'TSN Manager of the Year' and awardsmanagers.lgid in ('AL', 'NL')
+ORDER BY yearid
 
-
-with attendancedata as (SELECT teams.teamid, awardid,yearid,playerid
-						from awardsmanagers
-						INNER join teams using(yearid)
-						WHERE awardid = 'TSN Manager of the Year' and awardsmanagers.lgid = 'AL'
+with tsn_awards as (	SELECT playerid, teams.teamid
+							from awardsmanagers
+							INNER join teams using(yearid)
+							WHERE awardid = 'TSN Manager of the Year' and awardsmanagers.lgid = 'AL'
 						intersect
-						SELECT teams.teamid,awardid, yearid,playerid from awardsmanagers
-						INNER join teams using(yearid)
-						WHERE awardid = 'TSN Manager of the Year' and awardsmanagers.lgid = 'NL')
+							SELECT playerid, teams.teamid
+							from awardsmanagers
+							INNER join teams using(yearid)
+							WHERE awardid = 'TSN Manager of the Year' and awardsmanagers.lgid = 'NL')
 						
-SELECT distinct(teamid), awardid,playerid from attendancedata
-INNER join people using(playerid)
+SELECT DISTINCT namegiven, teams."name", teams.yearid
+FROM tsn_awards ta 
+JOIN managers mgr on ta.teamid = mgr.teamid and mgr.plyrmgr = 'Y' --and ta.yearid = mgr.yearid 
+JOIN people ppl on mgr.playerid = ppl.playerid
+JOIN teams on mgr.teamid = teams.teamid
 
-
+SELECT * FROM managers where playerid = 'bakerdu01' and plyrmgr = 'Y'
 
 /*
-Find all players who hit their career highest number of home runs in 2016. Consider only players who have played in the league for at least 10 years,
+Find all players who hit their career highest number of home runs in 2016. 
+Consider only players who have played in the league for at least 10 years,
 and who hit at least one home run in 2016. Report the players' first and last names and the number of home runs they hit in 2016.*/
 SELECT * from batting
 SELECT * from teams
 SELECT * from people
 
-SELECT batting.yearid,batting.teamid, people.namefirst as player_name, max(batting.hr) from teams
+SELECT people.namegiven, max(batting.hr) from teams
 INNER join batting using(yearid)
 INNER join people using(playerid)
 where batting.yearid = 2016
-GROUP by 1,2,3
-order by max(batting.hr) desc
+GROUP by 1
+having min(batting.hr) > 0
+order by 2 desc
